@@ -1,17 +1,16 @@
 {
   "name": "iot-api",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "API Rest para una plataforma de IoT",
+  "main": "src/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/app.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "body-parser": "^1.20.2",
-    "express": "^4.19.2",
-    "sqlite3": "^5.1.7"
-  }
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "sqlite3": "^5.0.2"
+  },
+  "author": "",
+  "license": "ISC"
 }
