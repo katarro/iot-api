@@ -2,144 +2,108 @@ const express = require("express");
 const router = express.Router();
 const db = require("./db");
 
-// Endpoint para insertar datos del sensor
-router.post("/api/v1/sensor_data", (req, res) => {
-  const { company_api_key, sensor_id, json_data } = req.body;
+// Consultar datos del sensor (GET)
+router.get("/api/v1/sensor_data", (req, res) => {
+  const { company_api_key, from, to, sensor_ids } = req.query;
 
-  if (!company_api_key || !sensor_id || !json_data) {
-    return res.status(400).send("Missing required body parameters");
-  }
+  db.query("SELECT id FROM Company WHERE company_api_key = ?", [company_api_key], (err, results) => {
+    if (err) {
+      console.error("Database error:", err.message);
+      return res.status(500).json({ error: "Database error", message: err.message });
+    }
+    if (results.length === 0) {
+      return res.status(400).json({ error: "Invalid company API key" });
+    }
 
-  // Verificar que la company_api_key es válida
-  db.get(
-    "SELECT id FROM Company WHERE company_api_key = ?",
-    [company_api_key],
-    (err, company) => {
+    const sensorIdList = sensor_ids.split(',').map(id => parseInt(id));
+    const query = `
+      SELECT * FROM SensorData 
+      WHERE sensor_id IN (?) 
+      AND timestamp BETWEEN ? AND ?
+    `;
+    db.query(query, [sensorIdList, from, to], (err, results) => {
       if (err) {
         console.error("Database error:", err.message);
-        return res.status(500).send(err.message);
+        return res.status(500).json({ error: "Database error", message: err.message });
       }
-      if (!company) {
-        console.log("Invalid company API key:", company_api_key);
-        return res.status(400).send("Invalid company API key");
+      res.json(results);
+    });
+  });
+});
+
+// Crear un sensor (POST)
+router.post("/api/v1/sensors", (req, res) => {
+  const { location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key } = req.body;
+
+  db.query(
+    "INSERT INTO Sensor (location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key) VALUES (?, ?, ?, ?, ?)",
+    [location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key],
+    (err, result) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return res.status(500).json({ error: "Database error", message: err.message });
       }
-
-      const company_id = company.id;
-
-      // Verificar que el sensor pertenece a la compañía
-      db.get(
-        "SELECT id FROM Sensor WHERE id = ? AND company_id = ?",
-        [sensor_id, company_id],
-        (err, sensor) => {
-          if (err) {
-            console.error("Database error:", err.message);
-            return res.status(500).send(err.message);
-          }
-          if (!sensor) {
-            console.log("Sensor does not belong to the company");
-            return res
-              .status(400)
-              .send("Sensor does not belong to the company");
-          }
-
-          const timestamp = Math.floor(Date.now() / 1000);
-          console.log(
-            "Inserting data with sensor_id:",
-            sensor_id,
-            "timestamp:",
-            timestamp
-          );
-
-          db.run(
-            "INSERT INTO SensorData (sensor_id, json_data, timestamp) VALUES (?, ?, ?)",
-            [sensor_id, JSON.stringify(json_data), timestamp],
-            function (err) {
-              if (err) {
-                console.error("Database error:", err.message);
-                return res.status(500).send(err.message);
-              }
-              console.log("Data inserted with sensor_id:", sensor_id);
-              res.status(201).send("Data inserted");
-            }
-          );
-        }
-      );
+      res.status(201).json({ message: "Sensor inserted", id: result.insertId });
     }
   );
 });
 
-// Endpoint para consultar datos del sensor
-router.get("/api/v1/sensor_data", (req, res) => {
-  const { company_api_key, from, to, sensor_ids } = req.query;
-
-  if (!company_api_key || !from || !to || !sensor_ids) {
-    return res.status(400).send("Missing required query parameters");
-  }
-
-  const fromTimestamp = parseInt(from, 10);
-  const toTimestamp = parseInt(to, 10);
-  const sensorIdList = sensor_ids.split(",").map((id) => parseInt(id, 10));
-
-  console.log("Querying data with params:", {
-    company_api_key,
-    from: fromTimestamp,
-    to: toTimestamp,
-    sensor_ids: sensorIdList,
+// Obtener todos los sensores (GET)
+router.get("/api/v1/sensors", (req, res) => {
+  db.query("SELECT * FROM Sensor", (err, results) => {
+    if (err) {
+      console.error("Database error:", err.message);
+      return res.status(500).json({ error: "Database error", message: err.message });
+    }
+    res.json(results);
   });
+});
 
-  // Verificar que la company_api_key es válida
-  db.get(
-    "SELECT id FROM Company WHERE company_api_key = ?",
-    [company_api_key],
-    (err, company) => {
+// Obtener un sensor (GET)
+router.get("/api/v1/sensors/:id", (req, res) => {
+  const { id } = req.params;
+
+  db.query("SELECT * FROM Sensor WHERE id = ?", [id], (err, results) => {
+    if (err) {
+      console.error("Database error:", err.message);
+      return res.status(500).json({ error: "Database error", message: err.message });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Sensor not found" });
+    }
+    res.json(results[0]);
+  });
+});
+
+// Actualizar un sensor (PUT)
+router.put("/api/v1/sensors/:id", (req, res) => {
+  const { id } = req.params;
+  const { location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key } = req.body;
+
+  db.query(
+    "UPDATE Sensor SET location_id = ?, sensor_name = ?, sensor_category = ?, sensor_meta = ?, sensor_api_key = ? WHERE id = ?",
+    [location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key, id],
+    (err, result) => {
       if (err) {
         console.error("Database error:", err.message);
-        return res.status(500).send(err.message);
+        return res.status(500).json({ error: "Database error", message: err.message });
       }
-      if (!company) {
-        console.log("Invalid company API key:", company_api_key);
-        return res.status(400).send("Invalid company API key");
-      }
-
-      const company_id = company.id;
-
-      // Verificar que los sensores pertenecen a la compañía
-      db.all(
-        "SELECT id FROM Sensor WHERE company_id = ? AND id IN (" +
-          sensorIdList.map(() => "?").join(",") +
-          ")",
-        [company_id, ...sensorIdList],
-        (err, sensors) => {
-          if (err) {
-            console.error("Database error:", err.message);
-            return res.status(500).send(err.message);
-          }
-
-          if (sensors.length !== sensorIdList.length) {
-            console.log("One or more sensors do not belong to the company");
-            return res
-              .status(400)
-              .send("One or more sensors do not belong to the company");
-          }
-
-          const query =
-            "SELECT * FROM SensorData WHERE sensor_id IN (" +
-            sensorIdList.map(() => "?").join(",") +
-            ") AND timestamp BETWEEN ? AND ?";
-          const queryParams = [...sensorIdList, fromTimestamp, toTimestamp];
-
-          console.log("SQL Query:", query);
-          console.log("Query Params:", queryParams);
-
-          db.all(query, queryParams, (err, rows) => {
-            if (err) return res.status(500).send(err.message);
-            console.log("Query results:", rows);
-            res.json(rows);
-          });
-        }
-      );
+      res.status(200).json({ message: "Sensor updated" });
     }
   );
+});
+
+// Eliminar un sensor (DELETE)
+router.delete("/api/v1/sensors/:id", (req, res) => {
+  const { id } = req.params;
+
+  db.query("DELETE FROM Sensor WHERE id = ?", [id], (err, result) => {
+    if (err) {
+      console.error("Database error:", err.message);
+      return res.status(500).json({ error: "Database error", message: err.message });
+    }
+    res.status(200).json({ message: "Sensor deleted" });
+  });
 });
 
 module.exports = router;

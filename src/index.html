@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Sensores IoT</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    .container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      margin-bottom: 20px;
+      width: 100%;
+      max-width: 600px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    p {
+      color: #666;
+    }
+    form {
+      margin-top: 20px;
+    }
+    input, button {
+      margin: 5px 0;
+      padding: 10px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .actions button {
+      margin: 0 5px;
+      padding: 5px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Gestión de Sensores IoT</h1>
+
+    <form id="createSensorForm">
+      <h2>Crear Sensor</h2>
+      <input type="text" id="create_location_id" placeholder="Location ID" required>
+      <input type="text" id="create_sensor_name" placeholder="Sensor Name" required>
+      <input type="text" id="create_sensor_category" placeholder="Sensor Category" required>
+      <input type="text" id="create_sensor_meta" placeholder="Sensor Meta" required>
+      <input type="text" id="create_sensor_api_key" placeholder="Sensor API Key" required>
+      <button type="submit">Crear Sensor</button>
+    </form>
+
+    <form id="updateSensorForm">
+      <h2>Actualizar Sensor</h2>
+      <input type="text" id="update_id" placeholder="Sensor ID" required>
+      <input type="text" id="update_location_id" placeholder="Location ID" required>
+      <input type="text" id="update_sensor_name" placeholder="Sensor Name" required>
+      <input type="text" id="update_sensor_category" placeholder="Sensor Category" required>
+      <input type="text" id="update_sensor_meta" placeholder="Sensor Meta" required>
+      <input type="text" id="update_sensor_api_key" placeholder="Sensor API Key" required>
+      <button type="submit">Actualizar Sensor</button>
+    </form>
+
+    <form id="deleteSensorForm">
+      <h2>Eliminar Sensor</h2>
+      <input type="text" id="delete_id" placeholder="Sensor ID" required>
+      <button type="submit">Eliminar Sensor</button>
+    </form>
+
+    <form id="getSensorForm">
+      <h2>Obtener Datos de un Sensor</h2>
+      <input type="text" id="get_id" placeholder="Sensor ID" required>
+      <button type="submit">Obtener Datos</button>
+    </form>
+
+    <form id="getSensorDataForm">
+      <h2>Consultar Datos de Sensores</h2>
+      <input type="text" id="get_company_api_key" placeholder="Company API Key" required>
+      <input type="text" id="get_from" placeholder="From Timestamp (EPOCH)" required>
+      <input type="text" id="get_to" placeholder="To Timestamp (EPOCH)" required>
+      <input type="text" id="get_sensor_ids" placeholder="Sensor IDs (comma separated)" required>
+      <button type="submit">Consultar Datos</button>
+    </form>
+
+    <div id="sensorDataList">
+      <h2>Datos del Sensor</h2>
+      <table id="sensorDataTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Sensor ID</th>
+            <th>Datos JSON</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Los datos del sensor se insertarán aquí dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    <div id="sensorList">
+      <h2>Lista de Sensores</h2>
+      <table id="sensorsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Location ID</th>
+            <th>Nombre</th>
+            <th>Categoría</th>
+            <th>Meta</th>
+            <th>API Key</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Los sensores se insertarán aquí dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    document.getElementById('createSensorForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const locationId = document.getElementById('create_location_id').value;
+      const sensorName = document.getElementById('create_sensor_name').value;
+      const sensorCategory = document.getElementById('create_sensor_category').value;
+      const sensorMeta = document.getElementById('create_sensor_meta').value;
+      const sensorApiKey = document.getElementById('create_sensor_api_key').value;
+
+      fetch('/api/v1/sensors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          location_id: locationId,
+          sensor_name: sensorName,
+          sensor_category: sensorCategory,
+          sensor_meta: sensorMeta,
+          sensor_api_key: sensorApiKey
+        })
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(error => { throw new Error(error.message); });
+        }
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('results').innerHTML = '<p>Sensor creado correctamente</p>';
+        loadSensors();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('results').innerHTML = `<p>${error.message}</p>`;
+      });
+    });
+
+    document.getElementById('updateSensorForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const id = document.getElementById('update_id').value;
+      const locationId = document.getElementById('update_location_id').value;
+      const sensorName = document.getElementById('update_sensor_name').value;
+      const sensorCategory = document.getElementById('update_sensor_category').value;
+      const sensorMeta = document.getElementById('update_sensor_meta').value;
+      const sensorApiKey = document.getElementById('update_sensor_api_key').value;
+
+      fetch(`/api/v1/sensors/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          location_id: locationId,
+          sensor_name: sensorName,
+          sensor_category: sensorCategory,
+          sensor_meta: sensorMeta,
+          sensor_api_key: sensorApiKey
+        })
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(error => { throw new Error(error.message); });
+        }
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('results').innerHTML = '<p>Sensor actualizado correctamente</p>';
+        loadSensors();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('results').innerHTML = `<p>${error.message}</p>`;
+      });
+    });
+
+    document.getElementById('deleteSensorForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const id = document.getElementById('delete_id').value;
+
+      fetch(`/api/v1/sensors/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(error => { throw new Error(error.message); });
+        }
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('results').innerHTML = '<p>Sensor eliminado correctamente</p>';
+        loadSensors();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('results').innerHTML = `<p>${error.message}</p>`;
+      });
+    });
+
+    document.getElementById('getSensorForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const id = document.getElementById('get_id').value;
+
+      fetch(`/api/v1/sensors/${id}`)
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(error => { throw new Error(error.message); });
+        }
+        return response.json();
+      })
+      .then(sensor => {
+        const sensorDataTableBody = document.getElementById('sensorDataTable').getElementsByTagName('tbody')[0];
+        sensorDataTableBody.innerHTML = ''; // Limpiar contenido previo
+        const row = sensorDataTableBody.insertRow();
+        row.insertCell(0).innerText = sensor.id;
+        row.insertCell(1).innerText = sensor.location_id;
+        row.insertCell(2).innerText = sensor.sensor_name;
+        row.insertCell(3).innerText = sensor.sensor_category;
+        row.insertCell(4).innerText = sensor.sensor_meta;
+        row.insertCell(5).innerText = sensor.sensor_api_key;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('results').innerHTML = `<p>${error.message}</p>`;
+      });
+    });
+
+    document.getElementById('getSensorDataForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const companyApiKey = document.getElementById('get_company_api_key').value;
+      const from = document.getElementById('get_from').value;
+      const to = document.getElementById('get_to').value;
+      const sensorIds = document.getElementById('get_sensor_ids').value;
+
+      fetch(`/api/v1/sensor_data?company_api_key=${companyApiKey}&from=${from}&to=${to}&sensor_ids=${sensorIds}`)
+        .then(response => {
+          if (!response.ok) {
+            console.log(response);
+            return response.json().then(error => { throw new Error(error.message); });
+          }
+          console.log(response);
+          return response.json();
+        })
+        .then(sensorData => {
+          const sensorDataTableBody = document.getElementById('sensorDataTable').getElementsByTagName('tbody')[0];
+          sensorDataTableBody.innerHTML = ''; // Limpiar contenido previo
+          sensorData.forEach(data => {
+            const row = sensorDataTableBody.insertRow();
+            row.insertCell(0).innerText = data.id;
+            row.insertCell(1).innerText = data.sensor_id;
+            row.insertCell(2).innerText = JSON.stringify(data.json_data);
+            row.insertCell(3).innerText = data.timestamp;
+          });
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          document.getElementById('results').innerHTML = `<p>${error.message}</p>`;
+        });
+    });
+
+    // Función para cargar y mostrar los sensores
+    function loadSensors() {
+      fetch('/api/v1/sensors')
+      .then(response => response.json())
+      .then(sensors => {
+        const sensorsTableBody = document.getElementById('sensorsTable').getElementsByTagName('tbody')[0];
+        sensorsTableBody.innerHTML = ''; // Limpiar contenido previo
+        sensors.forEach(sensor => {
+          const row = sensorsTableBody.insertRow();
+          row.insertCell(0).innerText = sensor.id;
+          row.insertCell(1).innerText = sensor.location_id;
+          row.insertCell(2).innerText = sensor.sensor_name;
+          row.insertCell(3).innerText = sensor.sensor_category;
+          row.insertCell(4).innerText = sensor.sensor_meta;
+          row.insertCell(5).innerText = sensor.sensor_api_key;
+          const actionsCell = row.insertCell(6);
+          actionsCell.classList.add('actions');
+          actionsCell.innerHTML = `
+            <button onclick="editSensor(${sensor.id})">Editar</button>
+            <button onclick="deleteSensor(${sensor.id})">Eliminar</button>
+          `;
+        });
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('results').innerHTML = '<p>Error al cargar los sensores</p>';
+      });
+    }
+
+    function editSensor(id) {
+      // Cargar los datos del sensor en el formulario de actualización
+      fetch(`/api/v1/sensors/${id}`)
+      .then(response => response.json())
+      .then(sensor => {
+        document.getElementById('update_id').value = sensor.id;
+        document.getElementById('update_location_id').value = sensor.location_id;
+        document.getElementById('update_sensor_name').value = sensor.sensor_name;
+        document.getElementById('update_sensor_category').value = sensor.sensor_category;
+        document.getElementById('update_sensor_meta').value = sensor.sensor_meta;
+        document.getElementById('update_sensor_api_key').value = sensor.sensor_api_key;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('results').innerHTML = '<p>Error al cargar los datos del sensor</p>';
+      });
+    }
+
+    function deleteSensor(id) {
+      if (confirm('¿Estás seguro de que deseas eliminar este sensor?')) {
+        fetch(`/api/v1/sensors/${id}`, {
+          method: 'DELETE'
+        })
+        .then(response => {
+          if (!response.ok) {
+            return response.json().then(error => { throw new Error(error.message); });
+          }
+          return response.json();
+        })
+        .then(data => {
+          document.getElementById('results').innerHTML = '<p>Sensor eliminado correctamente</p>';
+          loadSensors();
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          document.getElementById('results').innerHTML = `<p>${error.message}</p>`;
+        });
+      }
+    }
+
+    // Cargar los sensores al cargar la página
+    window.onload = loadSensors;
+  </script>
+</body>
+</html>
