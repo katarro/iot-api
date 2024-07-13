@@ -163,6 +163,12 @@
           placeholder="Timestamp (EPOCH)"
           required
         />
+        <input
+          type="text"
+          id="data_sensor_api_key"
+          placeholder="Sensor API Key"
+          required
+        />
         <button type="button" id="setCurrentTimestamp">
           Set Current Timestamp
         </button>
@@ -273,6 +279,9 @@
           const sensorId = document.getElementById("data_sensor_id").value;
           const jsonData = document.getElementById("json_data").value;
           const timestamp = document.getElementById("timestamp").value;
+          const sensorApiKey = document.getElementById(
+            "data_sensor_api_key"
+          ).value;
 
           fetch("/api/v1/sensor_data", {
             method: "POST",
@@ -283,6 +292,7 @@
               sensor_id: sensorId,
               json_data: jsonData,
               timestamp: timestamp,
+              sensor_api_key: sensorApiKey,
             }),
           })
             .then((response) => {
