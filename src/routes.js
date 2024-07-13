@@ -2,142 +2,296 @@ const express = require("express");
 const router = express.Router();
 const db = require("./db");
 
-// Endpoint para insertar datos del sensor
-router.post("/api/v1/sensor_data", (req, res) => {
-  const { company_api_key, sensor_id, json_data } = req.body;
-
-  if (!company_api_key || !sensor_id || !json_data) {
-    return res.status(400).send("Missing required body parameters");
+function verifyCompanyApiKey(req, res, next) {
+  const companyApiKey = req.query.company_api_key || req.body.company_api_key;
+  if (!companyApiKey) {
+    return res.status(400).json({ error: "Missing company API key" });
   }
 
-  // Verificar que la company_api_key es válida
-  db.get(
+  db.query(
     "SELECT id FROM Company WHERE company_api_key = ?",
-    [company_api_key],
-    (err, company) => {
+    [companyApiKey],
+    (err, results) => {
       if (err) {
-        console.error("Database error:", err.message);
-        return res.status(500).send(err.message);
+        console.error("Database error on company lookup:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
       }
-      if (!company) {
-        console.log("Invalid company API key:", company_api_key);
-        return res.status(400).send("Invalid company API key");
+      if (results.length === 0) {
+        return res.status(400).json({ error: "Invalid company API key" });
       }
 
-      const company_id = company.id;
+      req.companyId = results[0].id;
+      next();
+    }
+  );
+}
 
-      // Verificar que el sensor pertenece a la compañía
-      db.get(
-        "SELECT id FROM Sensor WHERE id = ? AND company_id = ?",
-        [sensor_id, company_id],
-        (err, sensor) => {
-          if (err) {
-            console.error("Database error:", err.message);
-            return res.status(500).send(err.message);
-          }
-          if (!sensor) {
-            console.log("Sensor does not belong to the company");
-            return res
-              .status(400)
-              .send("Sensor does not belong to the company");
-          }
+// Consultar todas las compañías (GET)
+router.get("/api/v1/companies", (req, res) => {
+  db.query("SELECT * FROM Company", (err, results) => {
+    if (err) {
+      console.error("Database error on company lookup:", err.message);
+      return res
+        .status(500)
+        .json({ error: "Database error", message: err.message });
+    }
+    res.json(results);
+  });
+});
 
-          const timestamp = Math.floor(Date.now() / 1000);
-          console.log(
-            "Inserting data with sensor_id:",
-            sensor_id,
-            "timestamp:",
-            timestamp
-          );
-
-          db.run(
-            "INSERT INTO SensorData (sensor_id, json_data, timestamp) VALUES (?, ?, ?)",
-            [sensor_id, JSON.stringify(json_data), timestamp],
-            function (err) {
-              if (err) {
-                console.error("Database error:", err.message);
-                return res.status(500).send(err.message);
-              }
-              console.log("Data inserted with sensor_id:", sensor_id);
-              res.status(201).send("Data inserted");
-            }
-          );
-        }
-      );
+// Consultar todas las ubicaciones (GET)
+router.get("/api/v1/locations", verifyCompanyApiKey, (req, res) => {
+  console.log("Company ID:", req);
+  db.query(
+    "SELECT * FROM Location WHERE company_id = ?",
+    [req.companyId],
+    (err, results) => {
+      if (err) {
+        console.error("Database error on location lookup:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
+      }
+      res.json(results);
     }
   );
 });
 
-// Endpoint para consultar datos del sensor
-router.get("/api/v1/sensor_data", (req, res) => {
-  const { company_api_key, from, to, sensor_ids } = req.query;
+// Consultar datos del sensor (GET)
+router.get("/api/v1/sensor_data", verifyCompanyApiKey, (req, res) => {
+  const { from, to, sensor_ids } = req.query;
+  console.log("Received query params:", req.query);
 
-  if (!company_api_key || !from || !to || !sensor_ids) {
-    return res.status(400).send("Missing required query parameters");
+  // Verificar si faltan parámetros
+  if (!from || !to || !sensor_ids) {
+    console.error("Missing required query parameters");
+    return res.status(400).json({ error: "Missing required query parameters" });
   }
 
-  const fromTimestamp = parseInt(from, 10);
-  const toTimestamp = parseInt(to, 10);
-  const sensorIdList = sensor_ids.split(",").map((id) => parseInt(id, 10));
+  const sensorIdList = sensor_ids.split(",").map((id) => parseInt(id));
+  if (sensorIdList.some(isNaN)) {
+    console.error("Invalid sensor_ids format:", sensor_ids);
+    return res.status(400).json({ error: "Invalid sensor_ids format" });
+  }
 
-  console.log("Querying data with params:", {
-    company_api_key,
-    from: fromTimestamp,
-    to: toTimestamp,
-    sensor_ids: sensorIdList,
+  // Verificar que los sensores pertenecen a las ubicaciones de la compañía
+  const sensorQuery = `
+    SELECT Sensor.id FROM Sensor
+    JOIN Location ON Sensor.location_id = Location.id
+    WHERE Sensor.id IN (?) AND Location.company_id = ?
+  `;
+  console.log("Executing sensor verification query with params:", {
+    sensorIdList,
+    companyId: req.companyId,
   });
+  db.query(sensorQuery, [sensorIdList, req.companyId], (err, sensorResults) => {
+    if (err) {
+      console.error(
+        "Database error on sensor verification lookup:",
+        err.message
+      );
+      return res
+        .status(500)
+        .json({ error: "Database error", message: err.message });
+    }
 
-  // Verificar que la company_api_key es válida
-  db.get(
-    "SELECT id FROM Company WHERE company_api_key = ?",
-    [company_api_key],
-    (err, company) => {
+    if (sensorResults.length !== sensorIdList.length) {
+      console.error(
+        "One or more sensors do not belong to the company locations"
+      );
+      return res.status(400).json({
+        error: "One or more sensors do not belong to the company locations",
+      });
+    }
+
+    // Obtener los datos de los sensores verificados
+    const query = `
+      SELECT * FROM SensorData 
+      WHERE sensor_id IN (?) 
+      AND timestamp BETWEEN ? AND ?
+    `;
+    console.log("Executing sensor data query with params:", {
+      sensorIdList,
+      from,
+      to,
+    });
+    db.query(
+      query,
+      [sensorIdList, parseInt(from), parseInt(to)],
+      (err, results) => {
+        if (err) {
+          console.error("Database error on sensor data lookup:", err.message);
+          return res
+            .status(500)
+            .json({ error: "Database error", message: err.message });
+        }
+        console.log("Query results:", results);
+        res.json(results);
+      }
+    );
+  });
+});
+
+// Crear un sensor (POST)
+router.post("/api/v1/sensors", (req, res) => {
+  const {
+    location_id,
+    sensor_name,
+    sensor_category,
+    sensor_meta,
+    sensor_api_key,
+  } = req.body;
+
+  if (
+    !location_id ||
+    !sensor_name ||
+    !sensor_category ||
+    !sensor_meta ||
+    !sensor_api_key
+  ) {
+    return res.status(400).json({ error: "Missing required body parameters" });
+  }
+
+  db.query(
+    "INSERT INTO Sensor (location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key) VALUES (?, ?, ?, ?, ?)",
+    [location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key],
+    (err, result) => {
       if (err) {
         console.error("Database error:", err.message);
-        return res.status(500).send(err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
       }
-      if (!company) {
-        console.log("Invalid company API key:", company_api_key);
-        return res.status(400).send("Invalid company API key");
+      res.status(201).json({ message: "Sensor inserted", id: result.insertId });
+    }
+  );
+});
+
+// Obtener todos los sensores (GET)
+router.get("/api/v1/sensors", verifyCompanyApiKey, (req, res) => {
+  db.query(
+    "SELECT * FROM Sensor WHERE location_id IN (SELECT id FROM Location WHERE company_id = ?)",
+    [req.companyId],
+    (err, results) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
       }
+      res.json(results);
+    }
+  );
+});
 
-      const company_id = company.id;
+// Obtener un sensor (GET)
+router.get("/api/v1/sensors/:id", verifyCompanyApiKey, (req, res) => {
+  const { id } = req.params;
 
-      // Verificar que los sensores pertenecen a la compañía
-      db.all(
-        "SELECT id FROM Sensor WHERE company_id = ? AND id IN (" +
-          sensorIdList.map(() => "?").join(",") +
-          ")",
-        [company_id, ...sensorIdList],
-        (err, sensors) => {
-          if (err) {
-            console.error("Database error:", err.message);
-            return res.status(500).send(err.message);
-          }
+  db.query(
+    "SELECT * FROM Sensor WHERE id = ? AND location_id IN (SELECT id FROM Location WHERE company_id = ?)",
+    [id, req.companyId],
+    (err, results) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
+      }
+      if (results.length === 0) {
+        return res.status(404).json({ error: "Sensor not found" });
+      }
+      res.json(results[0]);
+    }
+  );
+});
 
-          if (sensors.length !== sensorIdList.length) {
-            console.log("One or more sensors do not belong to the company");
-            return res
-              .status(400)
-              .send("One or more sensors do not belong to the company");
-          }
+// Actualizar un sensor (PUT)
+router.put("/api/v1/sensors/:id", verifyCompanyApiKey, (req, res) => {
+  const { id } = req.params;
+  const {
+    location_id,
+    sensor_name,
+    sensor_category,
+    sensor_meta,
+    sensor_api_key,
+  } = req.body;
 
-          const query =
-            "SELECT * FROM SensorData WHERE sensor_id IN (" +
-            sensorIdList.map(() => "?").join(",") +
-            ") AND timestamp BETWEEN ? AND ?";
-          const queryParams = [...sensorIdList, fromTimestamp, toTimestamp];
+  if (
+    !location_id ||
+    !sensor_name ||
+    !sensor_category ||
+    !sensor_meta ||
+    !sensor_api_key
+  ) {
+    return res.status(400).json({ error: "Missing required body parameters" });
+  }
 
-          console.log("SQL Query:", query);
-          console.log("Query Params:", queryParams);
+  db.query(
+    "UPDATE Sensor SET location_id = ?, sensor_name = ?, sensor_category = ?, sensor_meta = ?, sensor_api_key = ? WHERE id = ? AND location_id IN (SELECT id FROM Location WHERE company_id = ?)",
+    [
+      location_id,
+      sensor_name,
+      sensor_category,
+      sensor_meta,
+      sensor_api_key,
+      id,
+      req.companyId,
+    ],
+    (err, result) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
+      }
+      res.status(200).json({ message: "Sensor updated" });
+    }
+  );
+});
 
-          db.all(query, queryParams, (err, rows) => {
-            if (err) return res.status(500).send(err.message);
-            console.log("Query results:", rows);
-            res.json(rows);
-          });
-        }
-      );
+// Eliminar un sensor (DELETE)
+router.delete("/api/v1/sensors/:id", verifyCompanyApiKey, (req, res) => {
+  const { id } = req.params;
+
+  db.query(
+    "DELETE FROM Sensor WHERE id = ? AND location_id IN (SELECT id FROM Location WHERE company_id = ?)",
+    [id, req.companyId],
+    (err, result) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
+      }
+      res.status(200).json({ message: "Sensor deleted" });
+    }
+  );
+});
+
+// Agregar datos a un sensor (POST)
+router.post("/api/v1/sensor_data", (req, res) => {
+  const { sensor_id, json_data, timestamp } = req.body;
+
+  if (!sensor_id || !json_data || !timestamp) {
+    return res.status(400).json({ error: "Missing required body parameters" });
+  }
+
+  db.query(
+    "INSERT INTO SensorData (sensor_id, json_data, timestamp) VALUES (?, ?, ?)",
+    [sensor_id, json_data, timestamp],
+    (err, result) => {
+      if (err) {
+        console.error("Database error:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Database error", message: err.message });
+      }
+      res
+        .status(201)
+        .json({ message: "Sensor data inserted", id: result.insertId });
     }
   );
 });
