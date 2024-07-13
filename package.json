@@ -4,7 +4,8 @@
   "description": "API Rest para una plataforma de IoT",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "build": "babel src -d dist"
   },
   "dependencies": {
     "body-parser": "^1.19.0",
@@ -14,5 +15,9 @@
     "sqlite3": "^5.0.2"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.7.0"
+  }
 }
