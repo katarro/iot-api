@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <title>Gestión de Sensores IoT</title>
     <style>
       body {
@@ -146,6 +147,7 @@
         <input type="text" id="delete_id" placeholder="Sensor ID" required />
         <button type="submit">Eliminar Sensor</button>
       </form>
+
       <form id="addSensorDataForm">
         <h2>Agregar Datos a un Sensor</h2>
         <input
@@ -166,6 +168,7 @@
         </button>
         <button type="submit">Agregar Datos</button>
       </form>
+
       <form id="getSensorForm">
         <h2>Obtener Datos de un Sensor</h2>
         <input type="text" id="get_id" placeholder="Sensor ID" required />
@@ -174,12 +177,6 @@
 
       <form id="getSensorDataForm">
         <h2>Consultar Datos de Sensores</h2>
-        <input
-          type="text"
-          id="get_sensor_api_key"
-          placeholder="Sensor API Key"
-          required
-        />
         <input
           type="text"
           id="get_from"
@@ -229,7 +226,6 @@
               <th>Categoría</th>
               <th>Meta</th>
               <th>API Key</th>
-              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -239,9 +235,30 @@
       </div>
 
       <div id="results"></div>
+
+      <div id="locationList">
+        <h2>Lista de Ubicaciones</h2>
+        <table id="locationsTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Company ID</th>
+              <th>Nombre</th>
+              <th>País</th>
+              <th>Ciudad</th>
+              <th>Meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Las ubicaciones se insertarán aquí dinámicamente -->
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <script>
+      let companyApiKey = prompt("Please enter your Company API Key:");
+
       document
         .getElementById("setCurrentTimestamp")
         .addEventListener("click", function () {
@@ -269,7 +286,6 @@
             }),
           })
             .then((response) => {
-              console.log("Response:", response);
               if (!response.ok) {
                 return response.json().then((error) => {
                   throw new Error(error.message);
@@ -288,6 +304,7 @@
               ).innerHTML = `<p>${error.message}</p>`;
             });
         });
+
       document
         .getElementById("createSensorForm")
         .addEventListener("submit", function (event) {
@@ -316,6 +333,7 @@
               sensor_category: sensorCategory,
               sensor_meta: sensorMeta,
               sensor_api_key: sensorApiKey,
+              company_api_key: companyApiKey,
             }),
           })
             .then((response) => {
@@ -368,6 +386,7 @@
               sensor_category: sensorCategory,
               sensor_meta: sensorMeta,
               sensor_api_key: sensorApiKey,
+              company_api_key: companyApiKey,
             }),
           })
             .then((response) => {
@@ -402,6 +421,9 @@
             headers: {
               "Content-Type": "application/json",
             },
+            body: JSON.stringify({
+              company_api_key: companyApiKey,
+            }),
           })
             .then((response) => {
               if (!response.ok) {
@@ -430,7 +452,7 @@
           event.preventDefault();
           const id = document.getElementById("get_id").value;
 
-          fetch(`/api/v1/sensors/${id}`)
+          fetch(`/api/v1/sensors/${id}?company_api_key=${companyApiKey}`)
             .then((response) => {
               if (!response.ok) {
                 return response.json().then((error) => {
@@ -464,14 +486,12 @@
         .getElementById("getSensorDataForm")
         .addEventListener("submit", function (event) {
           event.preventDefault();
-          const sensorApiKey =
-            document.getElementById("get_sensor_api_key").value;
           const from = document.getElementById("get_from").value;
           const to = document.getElementById("get_to").value;
           const sensorIds = document.getElementById("get_sensor_ids").value;
 
           fetch(
-            `/api/v1/sensor_data?sensor_api_key=${sensorApiKey}&from=${from}&to=${to}&sensor_ids=${sensorIds}`
+            `/api/v1/sensor_data?company_api_key=${companyApiKey}&from=${from}&to=${to}&sensor_ids=${sensorIds}`
           )
             .then((response) => {
               if (!response.ok) {
@@ -506,7 +526,7 @@
 
       // Función para cargar y mostrar los sensores
       function loadSensors() {
-        fetch("/api/v1/sensors")
+        fetch(`/api/v1/sensors?company_api_key=${companyApiKey}`)
           .then((response) => response.json())
           .then((sensors) => {
             const sensorsTableBody = document
@@ -521,12 +541,6 @@
               row.insertCell(3).innerText = sensor.sensor_category;
               row.insertCell(4).innerText = sensor.sensor_meta;
               row.insertCell(5).innerText = sensor.sensor_api_key;
-              const actionsCell = row.insertCell(6);
-              actionsCell.classList.add("actions");
-              actionsCell.innerHTML = `
-            <button onclick="editSensor(${sensor.id})">Editar</button>
-            <button onclick="deleteSensor(${sensor.id})">Eliminar</button>
-          `;
             });
           })
           .catch((error) => {
@@ -538,7 +552,7 @@
 
       function editSensor(id) {
         // Cargar los datos del sensor en el formulario de actualización
-        fetch(`/api/v1/sensors/${id}`)
+        fetch(`/api/v1/sensors/${id}?company_api_key=${companyApiKey}`)
           .then((response) => response.json())
           .then((sensor) => {
             document.getElementById("update_id").value = sensor.id;
@@ -564,6 +578,12 @@
         if (confirm("¿Estás seguro de que deseas eliminar este sensor?")) {
           fetch(`/api/v1/sensors/${id}`, {
             method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              company_api_key: companyApiKey,
+            }),
           })
             .then((response) => {
               if (!response.ok) {
@@ -587,8 +607,36 @@
         }
       }
 
-      // Cargar los sensores al cargar la página
-      window.onload = loadSensors;
+      function loadLocations() {
+        fetch(`/api/v1/locations?company_api_key=${companyApiKey}`)
+          .then((response) => response.json())
+          .then((locations) => {
+            const locationsTableBody = document
+              .getElementById("locationsTable")
+              .getElementsByTagName("tbody")[0];
+            locationsTableBody.innerHTML = ""; // Limpiar contenido previo
+            locations.forEach((location) => {
+              const row = locationsTableBody.insertRow();
+              row.insertCell(0).innerText = location.id;
+              row.insertCell(1).innerText = location.company_id;
+              row.insertCell(2).innerText = location.location_name;
+              row.insertCell(3).innerText = location.location_country;
+              row.insertCell(4).innerText = location.location_city;
+              row.insertCell(5).innerText = location.location_meta;
+            });
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            document.getElementById("results").innerHTML =
+              "<p>Error al cargar las ubicaciones</p>";
+          });
+      }
+
+      // Llamar a las funciones de carga al cargar la página
+      window.onload = function () {
+        loadSensors();
+        loadLocations();
+      };
     </script>
   </body>
 </html>

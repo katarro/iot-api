@@ -1,20 +1,22 @@
-const mysql = require('mysql2');
+const mysql = require("mysql2");
 
 // Configura la conexión a la base de datos MySQL
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'brewqhxqh7liisxjkcnv-mysql.services.clever-cloud.com',
-  user: process.env.DB_USER || 'uaggkm25uglyiq0m',
-  password: process.env.DB_PASSWORD || 'P1llZrGf7o324OyV9sLs',
-  database: process.env.DB_NAME || 'brewqhxqh7liisxjkcnv'
+  host:
+    process.env.DB_HOST ||
+    "brewqhxqh7liisxjkcnv-mysql.services.clever-cloud.com",
+  user: process.env.DB_USER || "uaggkm25uglyiq0m",
+  password: process.env.DB_PASSWORD || "P1llZrGf7o324OyV9sLs",
+  database: process.env.DB_NAME || "brewqhxqh7liisxjkcnv",
 });
 
 // Conecta a la base de datos
-db.connect(err => {
+db.connect((err) => {
   if (err) {
-    console.error('Error connecting to the database:', err);
+    console.error("Error connecting to the database:", err);
     return;
   }
-  console.log('Connected to the MySQL database.');
+  console.log("Connected to the MySQL database.");
 });
 
 // Crea las tablas si no existen
@@ -65,7 +67,6 @@ const createTables = () => {
       timestamp INT
     )
   `);
-
   // Insertar datos de ejemplo
   // db.query(`
   //   INSERT INTO Company (company_name, company_api_key)
@@ -75,7 +76,7 @@ const createTables = () => {
 
   // db.query(`
   //   INSERT INTO Sensor (company_id, location_id, sensor_name, sensor_category, sensor_meta, sensor_api_key)
-  //   VALUES 
+  //   VALUES
   //     (1, 1, 'Temperature Sensor', 'Temperature', 'Meta', 'temp_sensor_key'),
   //     (1, 1, 'Humidity Sensor', 'Humidity', 'Meta', 'hum_sensor_key'),
   //     (2, 2, 'Pressure Sensor', 'Pressure', 'Meta', 'press_sensor_key')
