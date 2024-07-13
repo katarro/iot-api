@@ -270,28 +270,46 @@ router.delete("/api/v1/sensors/:id", verifyCompanyApiKey, (req, res) => {
     }
   );
 });
-
 // Agregar datos a un sensor (POST)
 router.post("/api/v1/sensor_data", (req, res) => {
-  const { sensor_id, json_data, timestamp } = req.body;
+  console.log("Received sensor data:", req.body);
+  const { sensor_id, json_data, timestamp, sensor_api_key } = req.body;
 
-  if (!sensor_id || !json_data || !timestamp) {
+  if (!sensor_id || !json_data || !timestamp || !sensor_api_key) {
     return res.status(400).json({ error: "Missing required body parameters" });
   }
 
+  // Verificar que la API key del sensor es válida
   db.query(
-    "INSERT INTO SensorData (sensor_id, json_data, timestamp) VALUES (?, ?, ?)",
-    [sensor_id, json_data, timestamp],
-    (err, result) => {
+    "SELECT id FROM Sensor WHERE id = ? AND sensor_api_key = ?",
+    [sensor_id, sensor_api_key],
+    (err, results) => {
       if (err) {
-        console.error("Database error:", err.message);
+        console.error("Database error on sensor lookup:", err.message);
         return res
           .status(500)
           .json({ error: "Database error", message: err.message });
       }
-      res
-        .status(201)
-        .json({ message: "Sensor data inserted", id: result.insertId });
+      if (results.length === 0) {
+        return res.status(400).json({ error: "Invalid sensor API key" });
+      }
+
+      // Insertar los datos del sensor
+      db.query(
+        "INSERT INTO SensorData (sensor_id, json_data, timestamp) VALUES (?, ?, ?)",
+        [sensor_id, json_data, timestamp],
+        (err, result) => {
+          if (err) {
+            console.error("Database error:", err.message);
+            return res
+              .status(500)
+              .json({ error: "Database error", message: err.message });
+          }
+          res
+            .status(201)
+            .json({ message: "Sensor data inserted", id: result.insertId });
+        }
+      );
     }
   );
 });
